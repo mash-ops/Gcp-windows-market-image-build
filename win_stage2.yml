@@ -1,0 +1,64 @@
+---
+- hosts: all
+  vars:
+     ansible_winrm_transport: basic
+     ansible_user: opsadmin
+     ansible_password: "{{ password }}"
+     ansible_connection: winrm
+     ansible_winrm_server_cert_validation: ignore
+     ansible_winrm_port: 5985
+     ansible_ssh_user: deployer
+     ansible_ssh_private_key_file: /home/deployer/.ssh/id_rsa
+     ansible_python_interpreter: /home/deployer/.pyenv/shims/python
+      
+     vm_ip: "{{ vm_ip }}"
+     admin_password: "{{ admin_password }}"
+     imageVersion: "{{ imageVersion }}"
+
+  tasks:
+
+  - debug:
+      msg: "{{ imageVersion }}"
+
+  - name: "Uploading payload to {{ vm_ip }}" 
+    include: win_copy.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+      opsadmin_password: "{{ password }}"
+      admin_password: "{{ admin_password }}"
+
+  # Feb-08-2022: added task win_Tanium_error_code7_fix.yml, as suggested by Tanium support for error code7 issue in win2016 builds
+  - name: "Tanium error_code7 fix for win2016 {{ vm_ip }}" 
+    include: win_Tanium_error_code7_fix.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+      opsadmin_password: "{{ password }}"
+      admin_password: "{{ admin_password }}"
+
+  - name: "Hardening VM {{ vm_ip }}" 
+    include: win_harden.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+      opsadmin_password: "{{ password }}"
+      admin_password: "{{ admin_password }}"
+
+  - name: "Installing Apps on VM {{ vm_ip }}" 
+    include: win_App_inst_cleanup.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+      imagesource: "{{ image_source }}"
+      buildDate: "{{ buildDate }}"
+      #Jul20-2022: Adding below image_version for SCO-57010
+      imageVersion: "{{ imageVersion }}"
+
+  - name: "Tanium patch for ip {{ vm_ip }}"
+    include: tanium_newBuild_status.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+    tags: tanium_win_updates
+
+  - name: "Finalizing VM with ip {{ vm_ip }}" 
+    include: finalize_gcp_build.yml
+    vars:
+      vm_ip: "{{ vm_ip }}"
+

@@ -1,0 +1,146 @@
+---
+
+  - name: disable services 2012, 2012 R2, 2016, 2019
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - ALG
+         - AppMgmt
+         - DeviceAssociationService
+         - TrkWks
+         - fdPHost
+         - FDResPub
+         - SharedAccess
+         - iphlpsvc
+         - lltdsvc
+         - ShellHWDetection
+         - SCPolicySvc
+         - sacsvr
+         - SSDPSRV
+         - SstpSvc
+         - TapiSrv
+         - Themes
+         - Audiosrv
+         - AudioEndpointBuilder
+         - WerSvc
+         - WinHttpAutoProxySvc
+         #As per security team: RE: [URGENT] Windows Server Printer Spooler Vulnerability - CVE-2021-1675
+         #Adding spooler to disable 
+         - Spooler
+    when: ( "2019" in ansible_distribution or
+            "2012" in ansible_distribution or
+            "2016" in ansible_distribution )
+
+  - name: disable services 2012, 2012 R2, 2016
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - Browser
+    when: ( "2012" in ansible_distribution or
+            "2016" in ansible_distribution )
+
+  - name: disable services 2012, 2016, 2019
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - CscService
+    when: ( "2012" in ansible_distribution or
+            "2016" in ansible_distribution or
+            "2019" in ansible_distribution )
+
+  - name: disable services 2016, 2019
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - MapsBroker
+    when: ( "2019" in ansible_distribution or
+            "2016" in ansible_distribution )
+
+  - name: disable services 2016
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - AJRouter
+    when: ( "2016" in ansible_distribution )
+
+  - name: disable services 2012, 2012 R2
+    win_service:
+       name: "{{ item }}"
+       state: stopped
+       start_mode: disabled
+    ignore_errors: true
+    with_items:
+         - HID
+    when: ( "2012" in ansible_distribution )
+
+  - name: manual services 2012, 2012 R2, 2016, 2019
+    win_service:
+       name: "{{ item }}"
+       start_mode: manual
+    ignore_errors: true
+    with_items:
+         #As per security update the spooler needs to be disabled
+         #As of Jun-30-2021: RE: [URGENT] Windows Server Printer Spooler Vulnerability - CVE-2021-1675
+         #- Spooler  
+         - RasAuto
+         - RasMan
+         - RpcLocator
+    when: ( "2019" in ansible_distribution or
+            "2012" in ansible_distribution or
+            "2016" in ansible_distribution )
+
+  - name: manual services 2012, 2012 R2, 2019
+    win_service:
+       name: "{{ item }}"
+       start_mode: manual
+    ignore_errors: true
+    with_items:
+         - MSDTC
+    when: ( "2019" in ansible_distribution or
+            "2012" in ansible_distribution )
+
+  - name: manual services 2012, 2012 R2, 2016
+    win_service:
+       name: "{{ item }}"
+       start_mode: manual
+    ignore_errors: true
+    with_items:
+         - BITS
+    when: ( "2016" in ansible_distribution or
+            "2012" in ansible_distribution )
+
+  - name: manual services 2019
+    win_service:
+       name: "{{ item }}"
+       start_mode: manual
+    ignore_errors: true
+    with_items:
+         - wlidsvc
+    when: ( "2019" in ansible_distribution )
+
+  - name: auto services 2012, 2012 R2, 2016, 2019
+    win_service:
+       name: "{{ item }}"
+       start_mode: auto
+    ignore_errors: true
+    with_items:
+         - RemoteRegistry
+    when: ( "2019" in ansible_distribution or
+            "2012" in ansible_distribution or
+            "2016" in ansible_distribution )
+

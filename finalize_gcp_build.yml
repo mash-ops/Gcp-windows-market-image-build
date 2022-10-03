@@ -1,0 +1,58 @@
+---
+
+  - name: Ensure user opsadmin is absent
+    win_user:
+      name: opsadmin
+      state: absent
+    ignore_errors: true
+    register: del_opsadmin
+
+  - name: Deleting the users directory for "{{ del_user }}"
+    win_file:
+      path: "{{ del_user }}"
+      state: absent
+    ignore_errors: true
+    with_items:
+      - 'C:\users\opsadmin'
+    loop_control:
+      loop_var: del_user
+    when: del_opsadmin.changed
+
+  - name: Deleting c:\windows\temp\ directory content 
+    win_shell:
+      Remove-Item c:\windows\temp\* -Recurse -Force
+    ignore_errors: true
+
+  # Print the local user accounts
+  - name: print users
+    win_shell: |
+       wmic useraccount
+    register: usersout
+
+  - name: Print query output
+    debug:
+      var: usersout
+
+  # Clear event logs
+  - name: Clear event logs
+    win_shell: |
+        Clear-EventLog -LogName (Get-EventLog -List).log
+
+  # Sysprep the VM before image creation
+  - name: "gceSysprep VM"
+    #win_command: 'C:\Program Files\Google\Compute Engine\sysprep\gcesysprep.bat'
+    win_shell: .\gcesysprep.bat
+    args:
+      chdir: C:\Program Files\Google\Compute Engine\sysprep
+    ignore_errors: true
+    register: gceSysprep_output
+
+  # wait 5 minutes for sysprep to finish
+  - name: "Sysprep Waiting 5minutes, get a cup of coffee ;) "
+    pause:
+      minutes: 5
+
+  - name: Print sysprep status
+    debug:
+      var: gceSysprep_output
+

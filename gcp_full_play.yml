@@ -1,0 +1,117 @@
+---
+- hosts: localhost
+  vars_files: 
+    - secrets.yml
+
+  vars:
+    vm_name: "{{ vm_name }}"
+    image_family: "{{ image_family }}"
+    password: "{{ secret.opsadmin }}"
+    log_path: /root/gcp_vm/gcp_build.log
+    # Adding below after seeing "ConnectionResetError: [Errno 104] Connection reset by peer" in jenkins job
+    ansible_winrm_operation_timeout_sec: 60
+    ansible_winrm_read_timeout_sec: 70
+    imageVersion: "{{ image_version }}"
+
+  tasks:
+
+  - name: "Creating VM for image build {{ image_family }}"
+    #import_playbook: gcp_mkt_vm_create.yml
+    import_tasks: gcp_mkt_vm_create.yml
+    vars:
+      gcp_project: your_project-pd54-shared
+      gcp_cred_kind: serviceaccount
+      gcp_cred_file: /root/.pyenv/gcp/.your_project-pd54-shared.json
+      zone: "europe-west5-a"
+      region: "europe-west5"
+      vm_name: "{{ vm_name }}"
+      image_family: "{{ image_family }}"
+      password: "{{ secret.opsadmin }}"
+    register: vm_create_status
+
+  - set_fact:
+      vm_ip: "{{ vm_ip }}"
+      ansible_host: 10.235.192.149
+      ansible_user: deployer
+      ansible_connection: ssh
+      ansible_ssh_user: deployer
+      ansible_ssh_private_key_file: /home/deployer/.ssh/id_rsa
+      ansible_python_interpreter: /home/deployer/.pyenv/shims/python
+
+    # Calling stage2 post VM build automation on ss54afrundeck01
+  - name: "Performing stage2 build automation on  {{ vm_name }} with IP  {{ vm_ip }}"
+    shell:
+      export ANSIBLE_LOG_PATH="{{ vm_name }}_{{ vm_ip }}_market_build.{{ lookup('pipe', 'date +%Y%m%d_%H:%M') }}.log";
+      ansible-playbook -i "{{ vm_ip }}", -e "password={{ secret.opsadmin | regex_escape() }} admin_password={{ secret.Administrator | regex_escape() }} imagesource={{ image_source }} buildDate={{ buildDate }} imageVersion={{ imageVersion }}" /home/roaming/manjesh/gcp/marketBuild/win_stage2.yml -vvvv
+      #ansible-playbook -i "{{ vm_ip }}", -e "password={{ secret.opsadmin | regex_escape() }} admin_password={{ secret.Administrator | regex_escape() }}" /home/roaming/manjesh/gcp/marketBuild/win_stage2.yml -vvvv
+      #ansible-playbook -i "{{ vm_ip }}", -e "password={{ secret.opsadmin }}" /home/roaming/manjesh/gcp/marketBuild/win_stage2.yml -vvvv
+      #ansible-playbook -i "{{ vm_ip }}", /home/roaming/manjesh/gcp/marketBuild/win_stage2.yml -vvvv
+    vars: 
+      ansible_user: opsadmin
+      log_path: /home/deployer/
+      #ansible_password: "{{ secret.opsadmin }}"
+    register: stage2_status
+
+    # Stage3 setting focus to localhost, to run gcloud commands to create the image,
+  - name: Delegating to localhost
+    #vars:
+    #  ansible_python_interpreter: /root/.pyenv/shims/python
+    set_fact:
+      ansible_connection: local
+      ansible_host: 10.4.198.46
+      ansible_user: root
+      ansible_python_interpreter: /root/.pyenv/shims/python
+
+    # Calling stage3 image creation when stage2_status is successful
+  - name:  "Creating image  {{ vm_name }}-img from disk-{{ vm_name }} for {{ image_family }}"
+    vars:
+      ansible_python_interpreter: /root/.pyenv/shims/python
+    shell:
+      gcloud compute images create "{{ vm_name }}"-img --source-disk disk-"{{ vm_name }}" --source-disk-zone europe-west5-a --guest-os-features MULTI_IP_SUBNET
+    when: stage2_status
+    register: image_creation_status
+    delegate_to: localhost
+
+  - debug:
+      var: image_creation_status
+
+    # Deleting the build VM, when image creation and stage2_status is successful
+  #- name:  Deleting build VM 
+  - name:  "Deleting build VM {{ vm_name }}"
+    shell: |
+      gcloud compute instances delete "{{ vm_name }}" --zone=europe-west5-a
+      # Sep-10-2021 - added below to address stale ips left after vm deletion
+      # eg. address-sdow19910g115-img-test  10.235.192.196  INTERNAL  GCE_ENDPOINT           europe-west5  ss54-delivery-tools-sbn          RESERVED
+      #
+      gcloud compute addresses delete address-"{{ vm_name }}" --region europe-west5 --quiet
+    when: stage2_status and image_creation_status
+
+  - set_fact:
+     vm_name: "{{ vm_name }}-test"
+
+
+    # Calling stage4 post image build and testing on ss54afrundeck01
+  - name: "Performing stage4 automation image testing on {{ vm_name }} with IP {{ vm_ip }}"
+    shell:
+      ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "image_name={{ vm_name }}-img" gcp_postimage_test.yml -vvv
+    vars:
+      ansible_user: opsadmin
+    register: stage4_status
+
+  - debug:
+      var: stage4_status
+
+    # Deleting the test VM, when stage4_status (testing) is successful
+  - name:  "Deleting build VM {{ vm_name }}-img-test"
+    shell: |
+      gcloud compute instances delete "{{ vm_name }}-img-test" --zone=europe-west5-a
+      # Sep-10-2021 - added below to address stale ips left after vm deletion
+      # eg. address-sdow19910g115-img-test  10.235.192.196  INTERNAL  GCE_ENDPOINT           europe-west5  ss54-delivery-tools-sbn          RESERVED
+      #
+      gcloud compute addresses delete address-"{{ vm_name }}"-img-test --region europe-west5 --quiet
+    when: stage4_status 
+
+    # Calling stage5 deploy the image to image family, upon above tasks successfull
+#  - name: "Performing stage5 automation deploying image {{ vm_name }}-img to {{ image_family }} family"
+
+

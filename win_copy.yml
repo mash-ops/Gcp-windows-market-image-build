@@ -1,0 +1,90 @@
+---
+
+   - name: copying SetupClient.exe, tanium-init.dat, LAPS.x64.msi,newBuildRegistry,Certificates and install_details
+     win_copy:
+       src: "{{ item.source }}"
+       dest: c:\windows\temp\
+     with_items:
+       - { source: "{{ dirPath }}LGPO.zip" } 
+       - { source: "{{ dirPath }}win_harding" } 
+       - { source: "{{ dirPath }}SetupClient.exe" }
+       - { source: "{{ dirPath }}tanium-init.dat" }
+       - { source: "{{ dirPath }}LAPS.x64.msi" }
+       - { source: "{{ dirPath }}install_details.txt" }
+       - { source: "{{ dirPath }}new_build_only_reg.reg" }
+       - { source: "{{ dirPath }}BaltimoreCyberTrustRoot.crt" }
+       - { source: "{{ dirPath }}DigiCertAssuredIDRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootG2.crt" }
+       - { source: "{{ dirPath }}DigiCertHighAssuranceEVRootCA.crt" }
+       - { source: "{{ dirPath }}splunkforwarder-7.3.6-x64-release.msi" }
+       - { source: "{{ dirPath }}AssetLifecycleStatus.txt" }
+       - { source: "{{ dirPath }}build.txt" }
+       - { source: "{{ dirPath }}deployment.conf" }
+       - { source: "{{ dirPath }}CustomTags.txt" }
+       ## Mar-14-2022: Subsequent meetings with platform team and security team adding McAfee agent install to the image
+       - { source: "{{ dirPath }}McAfee_win_latest" }
+       ## below 2 are not being used
+       ##- { source: {{ dirPath }}splunkforwarder-6.6.0-x64-release.msi }
+       ##- { source: {{ dirPath }}zabbix_agent-3.4.7_x64.msi }
+     vars:
+        dirPath: /home/roaming/manjesh/gcp/marketBuild/DataCopy/
+        ansible_winrm_transport: basic
+        ansible_user: opsadmin
+        ansible_password: "{{ opsadmin_password }}"
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_port: 5985
+
+     # windows2019 related .net35 package, extracted from ISO media
+   - name: copying .net35 package for windows2019
+     win_copy:
+       src: "{{ item.source1 }}"
+       dest: c:\windows\temp\
+     with_items:
+       - { source1: "{{ dirPath }}microsoft-windows-netfx3-ondemand-package~31bf3856ad364e35~amd64~~.cab" }
+       - { source1: "{{ dirPath }}Microsoft-Windows-NetFx3-OnDemand-Package~31bf3856ad364e35~amd64~en-US~.cab" }
+     when: ( "2019" in ansible_distribution )
+     vars:
+        dirPath: /home/roaming/manjesh/gcp/marketBuild/DataCopy/
+        ansible_winrm_transport: basic
+        ansible_user: opsadmin
+        ansible_password: "{{ opsadmin_password }}"
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_port: 5985
+
+     # windows2016 related .net35 package, extracted from ISO media
+   - name: copying .net35 package for windows2016
+     win_copy:
+       src: "{{ item.source2 }}"
+       dest: c:\windows\temp\
+     with_items:
+       - { source2: "{{ dirPath }}microsoft-windows-netfx3-ondemand-package.cab" }
+     when: ( "2016" in ansible_distribution )
+     vars:
+        dirPath: /home/roaming/manjesh/gcp/marketBuild/DataCopy/
+        ansible_winrm_transport: basic
+        ansible_user: opsadmin
+        ansible_password: "{{ opsadmin_password }}"
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_port: 5985
+
+     # windows2012 related .net35 package, extracted sxs from ISO media
+   - name: copying .net35 package for windows2012
+     win_copy:
+       src: "{{ item.source3 }}"
+       dest: c:\windows\temp\
+     with_items:
+       - { source3: "{{ dirPath }}win12r2_sxs" }
+     when: ( "2012" in ansible_distribution )
+     vars:
+        dirPath: "{{ playbook_dir }}/DataCopy/"
+        ansible_winrm_transport: basic
+        ansible_user: opsadmin
+        ansible_password: "{{ opsadmin_password }}"
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_winrm_port: 5985
+

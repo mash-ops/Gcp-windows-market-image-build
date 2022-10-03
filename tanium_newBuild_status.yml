@@ -1,0 +1,64 @@
+---
+  - name: Wait for Tools dir is created upon initial tanium installation
+    win_wait_for:
+      path: C:\Program Files (x86)\Tanium\Tanium Client\tools
+      state: present
+
+  # As of Dec-10-2021 build failure, the directory count for tanium/tools has increased to 16
+  # for now Increasing the count to 16 from original 15, needs revisit for better logic
+  # As of Dec-13-2021, the dir count of tanium tools dir has reached 18, changed the until condition to fix this
+  # As of Apr-15-2022, the dir count of tanium tools dir has reduced to 12 (including our customtags.txt), reducing the count to 12
+  - name: Checking if Tanium client tools dir is populated
+    win_shell: Write-Host (Get-ChildItem 'C:\Program Files (x86)\Tanium\Tanium Client\tools'|Measure-Object).count
+    register: tanium_tools_count
+    until: (tanium_tools_count.stdout_lines[0]| int >= 12)
+    #until: (tanium_tools_count.stdout_lines[0]| int >= 16)
+    #As of Dec-13-2021, added above until and commented below until condition 
+    #until: tanium_tools_count.stdout.find("16") != -1
+    retries: 500
+    delay: 60
+
+  - name: Print Tanium tool dir count info
+    debug:
+      msg: "{{ tanium_tools_count }}"
+    ignore_errors: yes
+
+  - name: Wait for patch0.log is created 
+    win_wait_for:
+      path: C:\Program Files (x86)\Tanium\Tanium Client\Patch\patch0.log
+      state: present
+      timeout: 3600
+      sleep: 120
+      delay: 130
+    retries: 500
+    delay: 120
+
+  - name: Checking if Tanium patche installation is completed
+    # Aug-18-2021: added below to address issue where the market image is upto date on current patch AND Tanium has no applicable patches
+    # Aug-19-2021: backing out above change, not the correct pattern (product applicability results are current.) to check
+    #win_shell: (Select-String -Path 'C:\Program Files (x86)\Tanium\Tanium Client\Patch\patch0.log' -Pattern "(No product applicability scan is needed as the product applicability results are current.|All Patches Applied)")
+    win_shell: (get-Content 'C:\Program Files (x86)\Tanium\Tanium Client\Patch\patch*.log' |select-string "All Patches Applied")
+    #win_shell: (get-Content 'C:\Program Files (x86)\Tanium\Tanium Client\Patch\patch*.log' |select-string "Completed transaction for install_")
+    #win_shell: Write-Host (get-Content 'C:\Program Files (x86)\Tanium\Tanium Client\Patch\patch*.log' |select-string "Completed transaction for install_")
+    register: patch_complete_status
+    #until: patch_complete_status.stdout.find("All Patches Applied") != -1 or patch_complete_status.stdout.find("product applicability results are current.") != -1
+    until: patch_complete_status.stdout.find("All Patches Applied") != -1
+    #until: patch_complete_status.stdout.find("Completed transaction for install_") != -1
+    retries: 500
+    delay: 120
+
+  - name: Print Tanium patch status
+    debug:
+      msg: "{{ patch_complete_status }}"
+    ignore_errors: yes
+
+
+    # After tanium patch, some patch may need a reboot, rebooing here
+  - name: Rebooting after Tanium windows update/patching
+    win_reboot:
+      post_reboot_delay: 120
+    when: patch_complete_status
+
+  - name: Print current patches after Tanium patching
+    win_shell: get-hotfix|Sort-Object -Property InstalledOn
+    when: patch_complete_status

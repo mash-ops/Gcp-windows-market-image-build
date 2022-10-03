@@ -1,0 +1,237 @@
+---
+
+  - name: Install Tanium Client
+    win_shell: |
+      $tanium_install = {C:\windows\Temp\SetupClient.exe /ServerAddress=taniumgcp01,taniumgcp02,10.235.209.44,10.235.209.43 /ServerPort=17472 /LogVerbosityLevel=1 /S }
+      Invoke-Command -ScriptBlock $tanium_install
+      Start-Sleep -s 120
+    register: tanium_install_output
+
+  - name: Installing application package splunkforwarder 7.3.6.0 as of Mar.10.2021
+    win_package:
+      path: c:\windows\\temp\splunkforwarder-7.3.6-x64-release.msi
+      product_id: "{66AE85E1-F4DD-4F64-BF94-DD1437EA1B9D}"
+      state: present
+      arguments: RECEIVING_INDEXER="indexer1:9997" AGREETOLICENSE=Yes WINEVENTLOG_SEC_ENABLE=1  WINEVENTLOG_SYS_ENABLE=1 /quiet
+    register: splunk_install_status
+
+
+  # Install Local Administrator Password Solution (request by Bob.Kolarov)
+  - name: Installing application package, LAPS
+    win_package:
+      path: c:\windows\temp\{{ item }}
+      state: present
+    with_items:
+       - LAPS.x64.msi
+
+  # windows update is disabled, using Tanium for upadates
+  - name: update the Tanium registry for PATCH_NEWBUILD
+    win_regedit:
+      path: 'HKLM:\SOFTWARE\Wow6432Node\Tanium\Tanium Client\Sensor Data\Tags'
+      name: "PATCH_NEWBUILD"
+      data: ""
+      type: string
+      state: present
+
+  - name: Successfactor Branding (Organization)
+    win_regedit:
+      path: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+      name: "RegisteredOrganization"
+      data: "SAP - Successfactors"
+      type: string
+      state: present
+
+  - name: SAP Branding (Owner)
+    win_regedit:
+      path: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+      name: "RegisteredOwner"
+      data: "SAP"
+      type: string
+      state: present
+
+  - name: Check that AssetLifecycleStatus.txt in Tanium Client
+    win_stat:
+      path: 'C:\Program Files (x86)\Tanium\Tanium Client\AssetLifecycleStatus.txt'
+    register: stat_file
+
+    # Jan-24-2022: Added THREAT_RESPONSE into CustomTags.txt, and copied under C:\Program Files (x86)\Tanium\Tanium Client\Tools\
+  - name: Copying build.txt AssetLifecycleStatus.txt and deployment.conf
+    win_copy:
+      src: "{{ item.source }}"
+      dest: "{{ item.destination }}"
+      remote_src: yes
+    with_items:
+      - { source: c:\windows\temp\AssetLifecycleStatus.txt, destination: C:\Program Files (x86)\Tanium\Tanium Client\ }
+      - { source: c:\windows\temp\build.txt, destination: C:\ }
+      - { source: c:\windows\temp\deployment.conf, destination: C:\Program Files\SplunkUniversalForwarder\etc\system\local\ }
+      - { source: c:\windows\temp\CustomTags.txt, destination: C:\Program Files (x86)\Tanium\Tanium Client\Tools\ }
+
+  # Updating buildDate in c:\build.txt
+  - name: Updating Build Date as {{ buildDate }} in c:\build.txt
+    win_lineinfile:
+      path: C:\build.txt
+      backrefs: no
+      backup: no
+      regexp: '(^Build)'
+      line: 'Build      : {{ buildDate }} with latest updates/patches'
+
+  # Jul-20-2022: Adding version string into build.txt, for request https://jira.successfactors.com/browse/SCO-57010.
+  # Updating Version in c:\build.txt
+  - name: Updating Version as {{ imageVersion }} in c:\build.txt
+    win_lineinfile:
+      path: C:\build.txt
+      backrefs: no
+      backup: no
+      regexp: '(^Version)'
+      line: 'Version    : {{ imageVersion }}-{{ buildDate }} '
+
+  # Appending market Image source to build.txt
+  - name: Appending market image source to c:\build.txt 
+    win_lineinfile:
+      path: c:\build.txt
+      line: "GcpMarketImageVersion:  {{ imagesource }}"
+      newline: unix
+    register: append_output
+     
+  # Changing attribute of c:\build.txt to hidden and readonly
+  - name: Change the attributes of c:\build.txt back to Hidden & Readonly
+    win_shell: |
+        attrib +H +R c:\build.txt
+    ignore_errors: true
+    register: shell_output
+
+
+  # Added below for tcpip6/ipv6 disable as of Sep-30-2021 build
+  - name: Printing current network binding of the current interface
+    win_shell: Get-NetAdapterBinding
+
+  # Disabling TCPIP6 for all interfaces as of Sep-30-2021 build
+  - name: Disabled ms_tcpip6 of all the Interface
+    community.windows.win_net_adapter_feature:
+      interface: '*'
+      state: disabled
+      component_id:
+      - ms_tcpip6
+    register: disable_tcpip6
+
+  - debug:
+      var: disable_tcpip6
+
+  # Added below for tcpip6/ipv6 disable as of Sep-30-2021 build
+  - name: Printing current network binding after ms_tcpip6 disable
+    win_shell: Get-NetAdapterBinding
+
+  # Above method does't work if the nic name changes, trying below method with registry
+  # As documented here: https://docs.microsoft.com/en-us/troubleshoot/windows-server/networking/configure-ipv6-in-windows
+  - name: Disable ipv6/ms_tcpip6 as per request from platform team, implemented as of Sep-30-2021 build
+    win_regedit:
+       key: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters'
+       name: DisabledComponents
+       data: "0xFF"
+       type: dword
+       state: present
+    register: disable_ipv6_registery
+
+  - debug:
+      var: disable_ipv6_registery
+
+
+#  # Rebooting after App install
+#  - name: Rebooting after Apps install for peace of mind ;)
+#    win_reboot:
+
+  # .Net 3.5 is required to install features & roles, to address Error code 0x800F081F
+  - name: Install Feature .Net 3.5
+    win_feature:
+      name: NET-Framework-Core
+      state: present
+      source: C:\Windows\Temp\
+      include_sub_features: no
+      include_management_tools: no
+    when:  ( "2016" in ansible_distribution or
+             "2019" in ansible_distribution )
+    register: win_feature_net35
+
+  # .Net 3.5 is required to install features & roles, to address Error code 0x800F081F
+#  - name: Install Feature .Net 3.5 on windows 2012r2
+#    win_shell: |
+#        Dism.exe /online /enable-feature /featurename:NetFX3 /All /Source:C:\windows\temp\win12r2_sxs /LimitAccess
+#    ignore_errors: true
+#    when:  ( "2012" in ansible_distribution )
+#    register: win_feature_net35
+
+  - name: Install Feature .Net 3.5 on windows 2012r2
+    win_optional_feature:
+      name: NetFx3
+      include_parent: yes
+      source: C:\windows\temp\win12r2_sxs\
+      state: present
+    when:  ( "2012" in ansible_distribution )
+    register: win_feature_net35
+
+  - debug:
+      var: win_feature_net35
+
+  # Adding this after gceSysprep was hanging 
+  - name: Rebooting after .Net3.5 install for peace of mind ;)
+    win_reboot:
+      post_reboot_delay: 120
+
+  # Adding this after gceSysprep was hanging
+  - name: Rebooting after .Net3.5 install for peace of mind ;)
+    win_reboot:
+      post_reboot_delay: 120
+    when:  ( "2016" in ansible_distribution or
+             "2019" in ansible_distribution )
+
+  ## Mar-14-2022: Subsequent meetings with platform team and security team adding McAfee agent install to the image
+  #
+  - name: Install McAfee Client
+    win_shell: |
+      cd C:\windows\Temp\McAfee_Win_latest\
+      $mcafee_install = {C:\windows\Temp\McAfee_Win_latest\FramePkg.exe /silent /Install=Agent /CustomProps1="HCM" }
+      Invoke-Command -ScriptBlock $mcafee_install
+      Start-Sleep -s 120
+    register: mcafee_install_output
+
+  - name: Print McAfee install output
+    debug:
+      var: mcafee_install_output
+
+  - name: "Waiting 5minutes, for McAfee to settle ;) "
+    pause:
+      minutes: 5
+
+  - name: Install McAfee Endpoint Client
+    win_shell: |
+      cd C:\windows\Temp\McAfee_Win_latest\
+      $mcafee_endpoint_install = {C:\windows\Temp\McAfee_Win_latest\setupEP.exe ADDLOCAL="tp,atp" /qn /l"c:\logs\mcafeeENS.log" }
+      Invoke-Command -ScriptBlock $mcafee_endpoint_install
+      Start-Sleep -s 120
+    register: mcafee_endpoint_install_output
+
+  - name: Print McAfee Endpoint install output
+    debug:
+      var: mcafee_endpoint_install_output
+
+  # Reboot after McAfee Agent install
+  - name: Rebooting after McAfee Agent and Endpoint client installation
+    win_reboot:
+      post_reboot_delay: 120
+
+  # Deleting opsadmin directory
+  - name: deleting the users directory for "{{ del_user }}"
+    win_file:
+      path: "{{ del_user }}"
+      state: absent
+    ignore_errors: true
+    with_items:
+      - 'C:\users\opsadmin'
+    loop_control:
+      loop_var: del_user
+
+  # Clear event logs
+  - name: Clear event logs
+    win_shell: |
+        Clear-EventLog -LogName (Get-EventLog -List).log
+

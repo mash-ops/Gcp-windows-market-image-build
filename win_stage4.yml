@@ -1,0 +1,48 @@
+---
+- hosts: all
+  vars:
+     ansible_winrm_transport: basic
+     ansible_user: opsadmin
+     ansible_password: "{{ password }}"
+     ansible_connection: winrm
+     ansible_winrm_server_cert_validation: ignore
+     ansible_winrm_port: 5985
+     ansible_ssh_user: deployer
+     ansible_ssh_private_key_file: /home/deployer/.ssh/id_rsa
+     ansible_python_interpreter: /home/deployer/.pyenv/shims/python
+      
+     vm_ip: "{{ vm_ip }}"
+     admin_password: "{{ admin_password }}"
+
+  tasks:
+
+  - name: "Wait for test VM {{ vm_name }} with IP {{ vm_ip }} to become reachable over WinRM"
+    wait_for_connection:
+
+  - name: Ensure WinRM starts when the system has settled and is ready to work reliably
+    win_service:
+      name: WinRM
+      start_mode: delayed
+
+  - name: Install Feature IIS Web-Server with sub features and management tools
+    win_feature:
+      name: Web-Server
+      state: present
+      source: C:\Windows\WinSxS
+      include_sub_features: yes
+      include_management_tools: yes
+    register: win_feature
+
+  - name: Reboot if installing Web-Server feature requires it
+    ansible.windows.win_reboot:
+    when: win_feature.reboot_required
+
+  - name: Install Role Failover-clustering, RSAT-clustering, with sub features and management tools
+    win_feature:
+      name: Failover-Clustering
+      state: present
+      source: C:\Windows\WinSxS
+      include_sub_features: yes
+      include_management_tools: yes
+    register: win_role
+

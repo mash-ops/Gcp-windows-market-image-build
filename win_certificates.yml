@@ -1,0 +1,50 @@
+---
+#
+#How to Run : 1) source /root/ansible/bin/activate 2)ansible-playbook -i hosts wincopy.yml -vv
+#change the IP, in the hosts file you want this copied onto
+#updated : 02/02/2021, manjesh
+#updated : 06/03/2021, manjesh, added splunkforwarder-7.3.6-x64-release.msi, commented splunkforwarder-6.6.0-x64 and zabbix_agent-3.4.7_x64
+#
+- hosts: all
+  vars:
+     dirPath: c:\windows\temp\
+     ansible_winrm_transport: basic
+     #ansible_user: Administrator
+     ansible_user: opsadmin
+     ansible_password: Your_passwrd
+     #ansible_password: SuperSecret
+     ansible_connection: winrm
+     ansible_winrm_server_cert_validation: ignore
+     ansible_winrm_port: 5985
+
+  tasks:
+
+  - name: Installing BaltimoreCyberTrustRoot, DigiCertGlobalRootCA, DigiCertHighAssuranceEVRootCA, DigiCertAssuredIDRootCA,  DigiCertGlobalRootG2
+#    win_shell: |
+#      Import-Certificate -FilePath "{{ item }}" -CertStoreLocation 'Cert:\LocalMachine\root' -Verbose
+#      #C:\Windows\System32\certutil -addstore "Root" "{{ item }}"
+#    with_items:
+#      - "{{ dirPath }}BaltimoreCyberTrustRoot.crt"
+#      - "{{ dirPath }}DigiCertAssuredIDRootCA.crt" 
+#      - "{{ dirPath }}DigiCertGlobalRootCA.crt" 
+#      - "{{ dirPath }}DigiCertGlobalRootG2.crt"
+#      - "{{ dirPath }}DigiCertHighAssuranceEVRootCA.crt" 
+
+    win_certificate_store:
+       path: "{{ item.source }}"
+       file_type: pem
+       state: present
+       store_location: LocalMachine
+       #store_location: CurrentUser
+       store_name: root
+     #  thumbprint: D4DE20D05E66FC53FE1A50882C78DB2852CAE474
+     #become: yes
+     #become_method: runas
+     #become_user: SYSTEM
+       #store_name: 'Trusted Root Certification Authorities'
+    with_items:
+       - { source: "{{ dirPath }}BaltimoreCyberTrustRoot.crt" } 
+       - { source: "{{ dirPath }}DigiCertAssuredIDRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootG2.crt" }
+       - { source: "{{ dirPath }}DigiCertHighAssuranceEVRootCA.crt" }

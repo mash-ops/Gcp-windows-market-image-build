@@ -1,0 +1,204 @@
+---
+
+  # Disable windows update
+  - name: WIN_REGEDIT 
+    win_regedit:
+       key: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+       name: DisableWindowsUpdateAccess
+       data: "0"
+       type: dword
+  
+  # windows update is disabled, using Tanium for upadates
+  - name: update the Tanium registry for PATCH_NEWBUILD
+    win_regedit:
+      path: 'HKLM:\SOFTWARE\Wow6432Node\Tanium\Tanium Client\Sensor Data\Tags'
+      name: "PATCH_NEWBUILD"
+      data: ""
+      type: string
+      state: present
+
+  # Jan-19-2022: Commenting out below to test Tanium windows update error code:7
+  # Jan-24-2022: Uncommenting below, the windows error code:7 still persist, Tanium support is looking into it thru MSS-25238
+  # Remove windows-defender
+  - name: Uninstall defender
+    win_shell: |
+        Uninstall-WindowsFeature -Name Windows-Defender
+    ignore_errors: true
+
+  # Reference for below task : 
+  # https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-security-lan-manager-authentication-level
+  - name: Send NTLMv2 response only. Refuse LM & NTLM
+    win_regedit:
+       key: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+       name: LMCompatibilityLevel
+       data: "5"
+       type: dword
+
+  - name: restart update service
+    win_service:
+      name: wuauserv
+      state: restarted
+
+  # Applying LGPO
+  - name:  win_harding\LGPO-Bkp
+    win_shell: |
+        C:\Windows\Temp\win_harding\LGPO.exe /g C:\Windows\Temp\win_harding\LGPO-Bkp
+    ignore_errors: true
+
+  # Applying LGPO related registry
+  - name: AutoAdminLogon-WinSec&1.30.02.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\AutoAdminLogon-WinSec&1.30.02.reg'
+
+  - name: eventlog-Security-WarningLevel90_WinSec_2.90.02.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\eventlog-Security-WarningLevel90_WinSec_2.90.02.reg'
+
+  - name: schannel.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\schannel.reg'
+
+  - name: smbsigning.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\smbsigning.reg'
+  - name: SNMP-hardening-WinSec&2.90.02.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\SNMP-hardening-WinSec&2.90.02.reg'
+
+  - name: Tcpip-Parameters_WinSec2.70.01.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\Tcpip-Parameters_WinSec2.70.01.reg'
+
+  - name: UseLogonCredential-WinSec&1.30.08.reg
+    win_shell: |
+        reg import 'C:\Windows\Temp\win_harding\UseLogonCredential-WinSec&1.30.08.reg'
+
+  # rebooting after windows-defender uninstall and LGPO is applied
+  - name: Rebooting after LGPO install
+    win_reboot:
+      post_reboot_delay: 120
+
+  # Rename sfAdminstrator after LGPO changes it from Administrator
+  - name: Rename local account sfAdministrator to Administrator
+    win_shell: |
+      $rename_opsadmin={ C:\Windows\System32\wbem\WMIC.exe useraccount where "name like 'sfAdministrator'" rename name='Administrator'}
+      Invoke-Command -ScriptBlock $rename_opsadmin
+      Start-Sleep -s 30
+    register: shell_output
+
+
+  # Security remediation
+  - name: disable smb1protocol
+    win_shell: |
+        Disable-WindowsOptionalFeature -Online -FeatureName smb1protocol
+    ignore_errors: true
+
+  - name: disable samba
+    win_shell: |
+        Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force
+    ignore_errors: true
+
+  - name: disble ssl 2.0
+    win_shell: |
+        powershell.exe -ExecutionPolicy ByPass -File C:\Windows\Temp\win_harding\disable_ssl2_0.ps1
+
+  - name: disble ssl 3.0
+    win_shell: |
+        powershell.exe -ExecutionPolicy ByPass -File C:\Windows\Temp\win_harding\disable_ssl3_0.ps1
+
+  - name: disable firewall
+    win_shell: |
+        netsh advfirewall set allprofiles state off
+
+  - name: Spectre Meltdown protection 1
+    win_shell: |
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverride /t REG_DWORD /d 0 /f
+
+  - name: Spectre Meltdown protection 2
+    win_shell: |
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverrideMask /t REG_DWORD /d 3 /f
+
+
+  # Enable RDP
+  - name: Enable RDP
+    win_shell: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+
+#  - name: winrm commands in elevated mode
+#    win_shell: |
+#        powershell.exe -command Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Control\Lsa -Name disabledomaincreds -Value 0
+
+  - name: Disable services 2012, 2012 R2, 2016, 2019
+    include: win_services_harden.yml
+
+  # Make sure Administrator account is there
+  - name: Ensure user Administrator is present
+    win_user:
+      name: Administrator
+      password: "{{ admin_password }}"
+      account_disabled: no
+      account_locked: no
+      state: present
+      groups:
+         - Administrators
+
+  # switch to Administrator account
+  - name: now we have Administrator lets use it.
+    set_fact:
+      ansible_user: Administrator
+      ansible_password: "{{ admin_password }}"
+    no_log: true
+
+  # Remove the opsadmin account
+  - name: Ensure user opsadmin is absent
+    win_user:
+      name: opsadmin
+      state: absent
+
+  # Install SAP approved certificates
+  - name: Installing SAP approved certs BaltimoreCyberTrustRoot, DigiCertGlobalRootCA, DigiCertHighAssuranceEVRootCA, DigiCertAssuredIDRootCA,  DigiCertGlobalRootG2
+    win_certificate_store:
+       path: "{{ item.source }}"
+       file_type: pem
+       state: present
+       store_location: LocalMachine
+       store_name: root
+    with_items:
+       - { source: "{{ dirPath }}BaltimoreCyberTrustRoot.crt" }
+       - { source: "{{ dirPath }}DigiCertAssuredIDRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootCA.crt" }
+       - { source: "{{ dirPath }}DigiCertGlobalRootG2.crt" }
+       - { source: "{{ dirPath }}DigiCertHighAssuranceEVRootCA.crt" }
+    vars:
+     dirPath: c:\windows\temp\
+
+  # print current local user accounts
+  - name: print users
+    win_shell: |
+       wmic useraccount get name
+    register: usersout
+
+  - set_fact:
+      user_lines: []
+
+  - set_fact:
+      user_lines: "{{ usersout.stdout_lines | select('string') | list }}"
+  - debug:
+      msg: "This is a stdout line: {{ user_lines }}"
+
+  # Feb-28-2022: Removing MpSigStub.exe as requested by platform team via eMail
+  #              RE: [ACTION REQUIRED] Microsoft Defender Vulnerability remediation
+  #
+  - name: Remove a file, if present (MpSigStub.exe)
+    win_file:
+      path: C:\windows\System32\MpSigStub.exe
+      state: absent
+    register: file_deletion
+
+  - debug:
+      msg: "{{ file_deletion }}"
+
+  # Clear event logs
+  - name: Clear event logs
+    win_shell: |
+        Clear-EventLog -LogName (Get-EventLog -List).log

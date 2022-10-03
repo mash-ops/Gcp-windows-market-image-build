@@ -1,0 +1,24 @@
+---
+#
+# Feb-08-2022: Below suggestion from Tanium support for,  Tanium Windows update::Error: Windows update Error Code: 7
+# 1) Add this Registry Key: “reg add HKLM\SYSTEM\CurrentControlSet\Control /v ServicesPipeTimeout /t REG_SZ /d 600000 /f”  It appears that in Windows Server 2016, the Windows Update service starts with the VM even though the service is set to Manual. When Patch asks to stop it, it never does and therefore, Patch does not complete a scan.
+# 2) Increase the pagefile size form 1GB to 2GB.
+#
+
+  - name: Tanium suggested key ServicesPipeTimeout for windows error code7 issue on windows2016
+    win_shell: |
+        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control" /v ServicesPipeTimeout /t REG_SZ /d 600000 /f
+    when:  ( "2016" in ansible_distribution )
+
+  - name: Tanium support suggested to increasing Pagefile.sys to 2 GB 
+    win_shell: |
+        $pagefile = Get-WmiObject -Query "Select * From Win32_PageFileSetting Where Name like '%pagefile.sys'"
+        $pagefile.InitialSize = 2048
+        $pagefile.MaximumSize = 2048
+        $pagefile.Put()
+    when:  ( "2016" in ansible_distribution )
+    register: Tanium_increase_pagefile
+
+  - debug:
+      var: Tanium_increase_pagefile
+

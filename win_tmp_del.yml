@@ -1,0 +1,26 @@
+---
+#
+#How to Run : 1) source /root/ansible/bin/activate 2)ansible-playbook -i hosts wincopy.yml -vv
+#change the IP, in the hosts file you want this copied onto
+#updated : 02/02/2021, manjesh
+#updated : 06/03/2021, manjesh, added splunkforwarder-7.3.6-x64-release.msi, commented splunkforwarder-6.6.0-x64 and zabbix_agent-3.4.7_x64
+#
+- hosts: all
+  vars:
+     dirPath: /home/roaming/manjesh/gcp/marketBuild/DataCopy/
+     ansible_winrm_transport: basic
+     ansible_user: Administrator
+     #ansible_user: opsadmin
+     ansible_password: Your_passwrd
+     #ansible_password: SuperSecret
+     ansible_connection: winrm
+     ansible_winrm_server_cert_validation: ignore
+     ansible_winrm_port: 5985
+
+  tasks:
+  - name: deleting the users directory for "{{ del_dir }}"
+    win_shell:
+      #Remove-Item [-Path] <string[]> [-Filter <string>] [-Include <string[]>] [-Exclude <string[]>] [-Recurse] [-Force
+      #Remove-Item -LiteralPath c:\windows\temp\ -Filter *.*  -Recurse -Force
+      Remove-Item c:\windows\temp\* -Recurse -Force
+    ignore_errors: yes

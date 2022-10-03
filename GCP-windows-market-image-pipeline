@@ -1,0 +1,92 @@
+pipeline {
+    agent { label 'master' }
+    options { ansiColor('xterm-256color') }
+    parameters {
+        string(name: 'build_vm_name', description: 'Enter build VM Name, eg. sdow121020g115')
+        string(name: 'disk_size', description: 'Enter the Disk size, For MSSQL use 200', defaultValue: '128')
+        extendedChoice description: 'Choose Image to build', descriptionPropertyValue: '', multiSelectDelimiter: ',', name: 'versions_to_build', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_MULTI_SELECT', value: 'win2012r2-dc, win2016-dc, win2019-dc', defaultValue: 'win2012r2-dc', visibleItemCount: 3
+        string(name: 'image_version', description: 'Image Name, for MSSQL the position is importatn for image push', defaultValue: 'sdo-win2012r2-dc-Jan15-azure-latest')
+    }
+    stages {
+        stage('Paramters') {
+            steps {
+                sh "echo ${params.build_vm_name}"
+                sh "echo ${params.disk_size}"
+                sh "echo ${params.windows_version}"
+                //script { build_date = sh ( date +"%M-%d-%Y").trim() }
+                //def build_date = sh ( script: 'date +%b-%d-%Y', returnStdout: true )
+                //println build_date
+                script { def build_date = sh(script: 'date +%b-%d-%Y', returnStdout: true)
+                println build_date
+                }
+            }
+        }
+         stage('Check out Ansible Playbook code locally'){
+            steps {
+				//dir("./ansible-playbooks") {
+					git branch: 'master',
+					credentialsId: 'mash-ops',
+					url: 'https://github.com/mash-ops/Gcp-windows-market-image-build.git'
+                }
+           	}
+          stage('Check out Ansible Playbook code Remote'){
+               environment { SECRET_CRED_ID = credentials('i868326') }                 
+              steps {
+                   
+					sh '''
+					   echo "The value of credentialid is = $SECRET_CRED_ID"
+					   ping -c3 10.235.192.149
+					   #ssh deployer@10.235.192.149 uptime
+					   ssh  -o ConnectTimeout=30 deployer@10.235.192.149 '[[ -d /home/deployer/WindowsGcpMarketBuild ]] && ('/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild') || ('exit 0')'
+					   #ssh deployer@10.235.192.149 'echo [[ -d /home/deployer/WindowsGcpMarketBuild]] && (/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild) || (exit 0)'
+					   ssh -o ConnectTimeout=20 deployer@10.235.192.149 git clone https://i868326:93644c3b5072e7dc366d25a9ba0702f7b94bb51d@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git
+					   #Revist the below line, why secret_cred_id is not working
+					   #ssh deployer@10.235.192.149 git clone  'https://i868326:'${SECRET_CRED_ID}'@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git'
+					   '''  
+				}
+
+              }
+         // }
+        //}
+
+        stage('Image Build') {
+            environment {  build_date = sh(script: 'date +%b-%d-%Y', returnStdout: true)  }
+            steps {
+                echo "Sourcing Ansible Environment"
+                sh '''
+                    #source /root/ansible/bin/activate
+                    source /root/bin/source_deployer
+                    export ANSIBLE_FORCE_COLOR=true
+                    export ANSIBLE_DEBUG=True
+                    export ANSIBLE_LOG_PATH=/home/deployer/gcp_build.log
+                    # cp /build/scripts/manjesh/azure_build/marketBuild/.vault .
+                    cd /var/lib/jenkins/workspace/GCP-Windows-market-image-build_V2
+                    #ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date" gcp_full_play.yml --flush-cache -vvvv
+                    #Adding below image_version for SCO-57010, since Jul15-2022 build
+                    ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date image_version=$image_version" gcp_full_play.yml --flush-cache -vvvv
+                    '''
+                }
+            }
+        }
+        post { 
+        failure { 
+            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
+            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
+            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
+        }
+        success {
+            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB  <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
+            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
+            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
+        
+          // slackSend(color: "good", message: "${currentBuild.currentResult}: Image: ${params.image_name}, Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}Message from Jenkins Pipeline")    
+           
+          sh '''
+            slack_url="https://hooks.slack.com/services/your_channel/B015Z8C18MS/d3GQbTBTL40erW1K8pGDyxdC"
+            slack_message="Jenkins Job: ${JOB_NAME} with build# ${BUILD_NUMBER}, Successfully built :gcp_modern: :windows: Image:: ${windows_version} with Disk Size:: ${disk_size} GB"
+            curl -X POST -H "Content-type: application/json" --data "{'text': '${slack_message}'}" $slack_url
+            '''
+            }
+        }
+
+}
