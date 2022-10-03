@@ -2,10 +2,10 @@ pipeline {
     agent { label 'master' }
     options { ansiColor('xterm-256color') }
     parameters {
-        string(name: 'build_vm_name', description: 'Enter build VM Name, eg. sdow121020g115')
+        string(name: 'build_vm_name', description: 'Enter build VM Name, eg. sdow121020g115', defaultValue: 'sdow121020g115')
         string(name: 'disk_size', description: 'Enter the Disk size, For MSSQL use 200', defaultValue: '128')
         string(name: 'image_version', description: 'Image Name, for MSSQL the position is importatn for image push', defaultValue: 'sdo-win2012r2-dc-Jan15-azure-latest')
-        choice choices: ['win2012r2-dc', 'win2016-dc', 'win2019-dc'], description: 'Please select the Image to Build', name: 'image_family'
+        choice choices: ['win2012r2-dc', 'win2016-dc', 'win2019-dc'], description: 'Please select the Image to Build', name: 'windows_version'
     }
     stages {
         stage('Paramters') {
