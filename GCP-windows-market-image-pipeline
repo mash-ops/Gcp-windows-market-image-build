@@ -13,9 +13,6 @@ pipeline {
                 sh "echo ${params.build_vm_name}"
                 sh "echo ${params.disk_size}"
                 sh "echo ${params.windows_version}"
-                //script { build_date = sh ( date +"%M-%d-%Y").trim() }
-                //def build_date = sh ( script: 'date +%b-%d-%Y', returnStdout: true )
-                //println build_date
                 script { def build_date = sh(script: 'date +%b-%d-%Y', returnStdout: true)
                 println build_date
                 }
@@ -24,7 +21,7 @@ pipeline {
          stage('Check out Ansible Playbook code locally'){
             steps {
 				//dir("./ansible-playbooks") {
-					git branch: 'master',
+					git branch: 'newbuildServer',
 					credentialsId: 'mash-ops',
 					url: 'https://github.com/mash-ops/Gcp-windows-market-image-build.git'
                 }
@@ -55,12 +52,12 @@ pipeline {
                 echo "Sourcing Ansible Environment"
                 sh '''
                     #source /root/ansible/bin/activate
-                    source /root/bin/source_deployer
+                    source /var/jenkins_home/.gcp/source_deployer
                     export ANSIBLE_FORCE_COLOR=true
                     export ANSIBLE_DEBUG=True
-                    export ANSIBLE_LOG_PATH=/home/deployer/gcp_build.log
+                    #export ANSIBLE_LOG_PATH=/home/deployer/gcp_build.log
                     # cp /build/scripts/manjesh/azure_build/marketBuild/.vault .
-                    cd /var/lib/jenkins/workspace/GCP-Windows-market-image-build_V2
+                    cd /var/jenkins_home/workspace/GCP-Windows-market-image-build
                     #ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date" gcp_full_play.yml --flush-cache -vvvv
                     #Adding below image_version for SCO-57010, since Jul15-2022 build
                     ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date image_version=$image_version" gcp_full_play.yml --flush-cache -vvvv
@@ -68,25 +65,24 @@ pipeline {
                 }
             }
         }
-        post { 
-        failure { 
-            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
-            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
-            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
-        }
-        success {
-            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB  <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
-            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
-            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
-        
-          // slackSend(color: "good", message: "${currentBuild.currentResult}: Image: ${params.image_name}, Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}Message from Jenkins Pipeline")    
-           
-          sh '''
-            slack_url="https://hooks.slack.com/services/your_channel/B015Z8C18MS/d3GQbTBTL40erW1K8pGDyxdC"
-            slack_message="Jenkins Job: ${JOB_NAME} with build# ${BUILD_NUMBER}, Successfully built :gcp_modern: :windows: Image:: ${windows_version} with Disk Size:: ${disk_size} GB"
-            curl -X POST -H "Content-type: application/json" --data "{'text': '${slack_message}'}" $slack_url
-            '''
-            }
-        }
+//        post { 
+//        failure { 
+//            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
+//            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
+//            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
+//        }
+//        success {
+//            emailext body: "<br> Job parameters : Build VM Name :: ${params.build_vm_name}, Image :: ${params.windows_version} with Disk Size :: ${params.disk_size} GB  <br><br> ${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} <br><br> More info at: ${env.BUILD_URL}",
+//            recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'RequesterRecipientProvider']],
+//            to: 'manjesh.munegowda@sap.com, ', subject: "Jenkins Build ${currentBuild.currentResult}: Image:: ${params.windows_version} with Disk Size :: ${params.disk_size} GB, Job:: ${env.JOB_NAME}"
+//        
+//          // slackSend(color: "good", message: "${currentBuild.currentResult}: Image: ${params.image_name}, Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}Message from Jenkins Pipeline")    
+//           
+//          sh '''
+//            slack_url="https://hooks.slack.com/services/your_channel/B015Z8C18MS/d3GQbTBTL40erW1K8pGDyxdC"
+//            slack_message="Jenkins Job: ${JOB_NAME} with build# ${BUILD_NUMBER}, Successfully built :gcp_modern: :windows: Image:: ${windows_version} with Disk Size:: ${disk_size} GB"
+//            curl -X POST -H "Content-type: application/json" --data "{'text': '${slack_message}'}" $slack_url
+//            '''
+//            }
+//        }
 
-}
