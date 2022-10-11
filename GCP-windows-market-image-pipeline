@@ -58,7 +58,7 @@ pipeline {
                     export ANSIBLE_DEBUG=True
                     #export ANSIBLE_LOG_PATH=/home/deployer/gcp_build.log
                     # cp /build/scripts/manjesh/azure_build/marketBuild/.vault .
-                    cd /var/jenkins_home/workspace/GCP-Windows-market-image-build
+                    cd /var/jenkins_home/workspace/Gcp-windows-market-image-build
                     #ansible-playbook --vault-password-file /root/gcp_vm/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date" gcp_full_play.yml --flush-cache -vvvv
                     #Adding below image_version for SCO-57010, since Jul15-2022 build
                     ansible-playbook --vault-password-file /var/jenkins_home/.gcp/.vault_pass.txt -e "vm_name=$build_vm_name disk_size=$disk_size image_family=$windows_version buildDate=$build_date image_version=$image_version" gcp_full_play.yml --flush-cache -vvvv
