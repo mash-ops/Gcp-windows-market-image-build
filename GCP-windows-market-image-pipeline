@@ -26,9 +26,9 @@ pipeline {
 					url: 'https://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@github.com/mash-ops/Gcp-windows-market-image-build.git'
                 }
            	}
-          stage('Check out Ansible Playbook code Remote'){
-               environment { SECRET_CRED_ID = credentials('mash-ops') }                 
-               //environment { SECRET_CRED_ID = credentials('i868326') }                 
+//          stage('Check out Ansible Playbook code Remote'){
+//               environment { SECRET_CRED_ID = credentials('mash-ops') }                 
+//               //environment { SECRET_CRED_ID = credentials('i868326') }                 
 //              steps {
 //                   
 //					sh '''
