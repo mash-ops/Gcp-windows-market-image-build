@@ -27,7 +27,8 @@ pipeline {
                 }
            	}
           stage('Check out Ansible Playbook code Remote'){
-               environment { SECRET_CRED_ID = credentials('i868326') }                 
+               environment { SECRET_CRED_ID = credentials('mash-ops') }                 
+               //environment { SECRET_CRED_ID = credentials('i868326') }                 
               steps {
                    
 					sh '''
