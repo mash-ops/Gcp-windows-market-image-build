@@ -23,25 +23,25 @@ pipeline {
 				//dir("./ansible-playbooks") {
 					git branch: 'newbuildServer',
 					credentialsId: 'mash-ops',
-					url: 'https://github.com/mash-ops/Gcp-windows-market-image-build.git'
+					url: 'https://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@github.com/mash-ops/Gcp-windows-market-image-build.git'
                 }
            	}
           stage('Check out Ansible Playbook code Remote'){
                environment { SECRET_CRED_ID = credentials('mash-ops') }                 
                //environment { SECRET_CRED_ID = credentials('i868326') }                 
-              steps {
-                   
-					sh '''
-					   echo "The value of credentialid is = $SECRET_CRED_ID"
-					   ping -c3 10.235.192.149
-					   #ssh deployer@10.235.192.149 uptime
-					   ssh  -o ConnectTimeout=30 deployer@10.235.192.149 '[[ -d /home/deployer/WindowsGcpMarketBuild ]] && ('/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild') || ('exit 0')'
-					   #ssh deployer@10.235.192.149 'echo [[ -d /home/deployer/WindowsGcpMarketBuild]] && (/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild) || (exit 0)'
-					   ssh -o ConnectTimeout=20 deployer@10.235.192.149 git clone https://i868326:93644c3b5072e7dc366d25a9ba0702f7b94bb51d@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git
-					   #Revist the below line, why secret_cred_id is not working
-					   #ssh deployer@10.235.192.149 git clone  'https://i868326:'${SECRET_CRED_ID}'@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git'
-					   '''  
-				}
+//              steps {
+//                   
+//					sh '''
+//					   echo "The value of credentialid is = $SECRET_CRED_ID"
+//					   ping -c3 10.235.192.149
+//					   #ssh deployer@10.235.192.149 uptime
+//					   ssh  -o ConnectTimeout=30 deployer@10.235.192.149 '[[ -d /home/deployer/WindowsGcpMarketBuild ]] && ('/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild') || ('exit 0')'
+//					   #ssh deployer@10.235.192.149 'echo [[ -d /home/deployer/WindowsGcpMarketBuild]] && (/usr/bin/rm -rf /home/deployer/WindowsGcpMarketBuild) || (exit 0)'
+//					   ssh -o ConnectTimeout=20 deployer@10.235.192.149 git clone https://i868326:93644c3b5072e7dc366d25a9ba0702f7b94bb51d@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git
+//					   #Revist the below line, why secret_cred_id is not working
+//					   #ssh deployer@10.235.192.149 git clone  'https://i868326:'${SECRET_CRED_ID}'@sdoafgit.ondemand.com/I868326/WindowsGcpMarketBuild.git'
+//					   '''  
+//				}
 
               }
          // }
