@@ -18,7 +18,7 @@ pipeline {
                 }
             }
         }
-         stage('Check out Ansible Playbook code locally'){
+//         stage('Check out Ansible Playbook code locally'){
 //            steps {
 //				//dir("./ansible-playbooks") {
 //					git branch: 'newbuildServer',
